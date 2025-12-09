@@ -23,12 +23,14 @@ function createTripInfoMessage(threadId, tripData = {}) {
   const lodgingAddress = tripData.lodgingAddress || '_Not set yet_';
   const startDate = tripData.startDate || '_Not set yet_';
   const endDate = tripData.endDate || '_Not set yet_';
+  const alfredoSpending = (tripData.spending?.alfredo || 0).toFixed(2);
+  const rachelSpending = (tripData.spending?.rachel || 0).toFixed(2);
 
   return {
     components: [
       {
         type: MessageComponentTypes.TEXT_DISPLAY,
-        content: `## Trip Information\n\n**Lodging Address:**\n${lodgingAddress}\n\n**Trip Dates:**\n${startDate} - ${endDate}`,
+        content: `## Trip Information\n\n**Lodging Address:**\n${lodgingAddress}\n\n**Trip Dates:**\n${startDate} - ${endDate}\n\n---\n\n## Spending Tracker\n\n**Alfredo's Spending:**\n$${alfredoSpending}\n\n**Rachel's Spending:**\n$${rachelSpending}`,
       },
     ],
   };
@@ -118,7 +120,9 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
             // Initialize trip data storage for this thread
             tripThreads[thread.id] = {
                 messageId: null,
-                tripData: {},
+                tripData: {
+                    spending: { alfredo: 0, rachel: 0 }
+                },
             };
 
             const messageBody = {
@@ -232,6 +236,106 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
                         {
                             type: MessageComponentTypes.TEXT_DISPLAY,
                             content: `Failed to update trip information: ${err.message}`,
+                        },
+                    ],
+                },
+            });
+        }
+    }
+
+    if (name === 'log-spending') {
+        const channelId = req.body.channel_id;
+
+        // Check if command is used in a trip thread
+        if (!tripThreads[channelId]) {
+            return res.send({
+                type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+                data: {
+                    flags: InteractionResponseFlags.EPHEMERAL | InteractionResponseFlags.IS_COMPONENTS_V2,
+                    components: [
+                        {
+                            type: MessageComponentTypes.TEXT_DISPLAY,
+                            content: 'This command can only be used in a trip thread created with /create-trip-thread.',
+                        },
+                    ],
+                },
+            });
+        }
+
+        // Extract options
+        const options = req.body.data.options;
+        const person = options[0].value;  // 'alfredo' or 'rachel'
+        const amountStr = options[1].value.trim();  // Get string value
+
+        // Parse the amount - handle both comma and period as decimal separators
+        const normalizedAmount = amountStr.replace(',', '.');
+        const amount = parseFloat(normalizedAmount);
+
+        // Additional validation for amount
+        if (isNaN(amount) || amount <= 0) {
+            return res.send({
+                type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+                data: {
+                    flags: InteractionResponseFlags.EPHEMERAL | InteractionResponseFlags.IS_COMPONENTS_V2,
+                    components: [
+                        {
+                            type: MessageComponentTypes.TEXT_DISPLAY,
+                            content: `Invalid amount. Please enter a positive number (e.g., 25.50). You entered: "${amountStr}"`,
+                        },
+                    ],
+                },
+            });
+        }
+
+        // Update spending data
+        const threadData = tripThreads[channelId];
+
+        // Initialize spending object if it doesn't exist (for backward compatibility)
+        if (!threadData.tripData.spending) {
+            threadData.tripData.spending = { alfredo: 0, rachel: 0 };
+        }
+
+        // Ensure existing value is a number, then add the new amount
+        const currentAmount = parseFloat(threadData.tripData.spending[person]) || 0;
+        threadData.tripData.spending[person] = currentAmount + amount;
+
+        // Update the pinned message
+        try {
+            const updateEndpoint = `channels/${channelId}/messages/${threadData.messageId}`;
+            await DiscordRequest(updateEndpoint, {
+                method: 'PATCH',
+                body: {
+                    flags: InteractionResponseFlags.IS_COMPONENTS_V2,
+                    ...createTripInfoMessage(channelId, threadData.tripData),
+                },
+            });
+
+            // Send confirmation message
+            const personName = person.charAt(0).toUpperCase() + person.slice(1);
+            const formattedAmount = amount.toFixed(2);
+
+            return res.send({
+                type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+                data: {
+                    flags: InteractionResponseFlags.EPHEMERAL | InteractionResponseFlags.IS_COMPONENTS_V2,
+                    components: [
+                        {
+                            type: MessageComponentTypes.TEXT_DISPLAY,
+                            content: `Added $${formattedAmount} to ${personName}'s spending. New total: $${threadData.tripData.spending[person].toFixed(2)}`,
+                        },
+                    ],
+                },
+            });
+        } catch (err) {
+            console.error('Error updating spending:', err);
+            return res.send({
+                type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+                data: {
+                    flags: InteractionResponseFlags.EPHEMERAL | InteractionResponseFlags.IS_COMPONENTS_V2,
+                    components: [
+                        {
+                            type: MessageComponentTypes.TEXT_DISPLAY,
+                            content: `Failed to update spending: ${err.message}`,
                         },
                     ],
                 },

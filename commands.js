@@ -62,6 +62,38 @@ const UPDATE_TRIP_INFO_COMMAND = {
     contexts: [0, 1, 2],
 }
 
-const ALL_COMMANDS = [TEST_COMMAND, MY_COMMAND, UPDATE_TRIP_INFO_COMMAND];
+const LOG_SPENDING_COMMAND = {
+    name: 'log-spending',
+    type: 1,
+    description: 'Log spending for a person on this trip',
+    options: [
+        {
+            type: 3,
+            name: 'person',
+            description: 'Who is spending?',
+            required: true,
+            choices: [
+                {
+                    name: 'Alfredo',
+                    value: 'alfredo',
+                },
+                {
+                    name: 'Rachel',
+                    value: 'rachel',
+                },
+            ],
+        },
+        {
+            type: 3,
+            name: 'amount',
+            description: 'Amount spent (e.g., 25.50)',
+            required: true,
+        }
+    ],
+    integration_types: [0, 1],
+    contexts: [0, 1, 2],
+}
+
+const ALL_COMMANDS = [TEST_COMMAND, MY_COMMAND, UPDATE_TRIP_INFO_COMMAND, LOG_SPENDING_COMMAND];
 
 InstallGlobalCommands(process.env.APP_ID, ALL_COMMANDS);
