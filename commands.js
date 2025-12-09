@@ -26,6 +26,15 @@ const TEST_COMMAND = {
   contexts: [0, 1, 2],
 };
 
+// Second test command
+const TEST2_COMMAND = {
+  name: 'test2',
+  description: 'Second test command',
+  type: 1,
+  integration_types: [0, 1],
+  contexts: [0, 1, 2],
+};
+
 // Command containing options
 const CHALLENGE_COMMAND = {
   name: 'challenge',
@@ -45,21 +54,21 @@ const CHALLENGE_COMMAND = {
 };
 
 const MY_COMMAND = {
-    name: 'create-thread',
+    name: 'create-trip-thread',
     type: 1,
-    description: 'Create a thread in the current channel',
+    description: 'Create a thread for a trip',
     options: [
         {
-      type: 3,
+            type: 3,
             name: 'thread-name',
             description: 'Name your thread',
             required: true,
         }
     ],
-  integration_types: [0, 1],
-  contexts: [0, 2],
+    integration_types: [0, 1],
+    contexts: [0, 1, 2],
 }
 
-const ALL_COMMANDS = [TEST_COMMAND, CHALLENGE_COMMAND, MY_COMMAND];
+const ALL_COMMANDS = [TEST_COMMAND, TEST2_COMMAND, CHALLENGE_COMMAND, MY_COMMAND];
 
 InstallGlobalCommands(process.env.APP_ID, ALL_COMMANDS);

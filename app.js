@@ -58,6 +58,23 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
       });
     }
 
+    // "test2" command
+    if (name === 'test2') {
+      // Send a message into the channel where command was triggered from
+      return res.send({
+        type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+        data: {
+          flags: InteractionResponseFlags.IS_COMPONENTS_V2,
+          components: [
+            {
+              type: MessageComponentTypes.TEXT_DISPLAY,
+              // Fetches a random emoji to send from a helper function
+              content: `hello mars ${getRandomEmoji()}`
+            }
+          ]
+        },
+      });
+    }
 
     // "challenge" command
     if (name === 'challenge' && id) {
@@ -101,25 +118,60 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
         });
     }
 
-    if (name === 'create-thread') {
+    if (name === 'create-trip-thread') {
         const threadName = req.body.data.options[0].value;
-        const channelId = req.body.channel_id;
+        const guildId = req.body.guild_id;
 
         res.send({
             type: InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE,
         });
 
         try {
-            // Create thread via Discord API
-            const endpoint = `channels/${channelId}/threads`;
+            // Get all channels in the server to find #plans
+            const channelsEndpoint = `guilds/${guildId}/channels`;
+            const channelsRes = await DiscordRequest(channelsEndpoint, { method: 'GET' });
+            const channels = await channelsRes.json();
+
+            // Find the #plans channel
+            const plansChannel = channels.find(channel => channel.name === 'plans' && channel.type === 0);
+
+            if (!plansChannel) {
+                return res.send({
+                    type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+                    data: {
+                        flags: InteractionResponseFlags.EPHEMERAL | InteractionResponseFlags.IS_COMPONENTS_V2,
+                        components: [
+                            {
+                                type: MessageComponentTypes.TEXT_DISPLAY,
+                                content: 'Error: No #plans channel found in this server. Please create a text channel named "plans" first.',
+                            },
+                        ],
+                    },
+                });
+            }
+
+            // Create thread via Discord API in the #plans channel
+            const endpoint = `channels/${plansChannel.id}/threads`;
             const body = {
                 name: threadName,
                 type: 11, // Type 11 is for public threads
-                auto_archive_duration: 60, // Auto-archive after 60 minutes of inactivity
+                auto_archive_duration: 60, // Auto-archive after 10 days of inactivity
             };
 
             const threadRes = await DiscordRequest(endpoint, { method: 'POST', body });
             const thread = await threadRes.json();
+
+            // Create a message in the new thread
+            const messageEndpoint = `channels/${thread.id}/messages`;
+            const messageBody = {
+                content: `Welcome to the ${threadName} trip planning thread! 📍`,
+            };
+            const messageRes = await DiscordRequest(messageEndpoint, { method: 'POST', body: messageBody });
+            const message = await messageRes.json();
+
+            // Pin the message
+            const pinEndpoint = `channels/${thread.id}/pins/${message.id}`;
+            await DiscordRequest(pinEndpoint, { method: 'PUT' });
 
             return res.send({
                 type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
