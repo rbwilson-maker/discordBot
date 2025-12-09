@@ -381,7 +381,7 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
 
         // Get the field to update and the value
         const options = req.body.data.options;
-        const field = options[0].value; // 'lodging_address', 'start_date', 'end_date', or 'notes'
+        const field = options[0].value; // 'lodging_address', 'start_date', 'end_date', 'notes', 'alfredo_spending', or 'rachel_spending'
         const value = options[1].value;
 
         // Update the trip data
@@ -399,6 +399,33 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
             } else {
                 threadData.tripData.notes = value;
             }
+        } else if (field === 'alfredo_spending' || field === 'rachel_spending') {
+            // Initialize spending object if it doesn't exist
+            if (!threadData.tripData.spending) {
+                threadData.tripData.spending = { alfredo: 0, rachel: 0 };
+            }
+
+            // Parse and set the spending amount
+            const normalizedAmount = value.replace(',', '.');
+            const amount = parseFloat(normalizedAmount);
+
+            if (isNaN(amount)) {
+                return res.send({
+                    type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+                    data: {
+                        flags: InteractionResponseFlags.EPHEMERAL | InteractionResponseFlags.IS_COMPONENTS_V2,
+                        components: [
+                            {
+                                type: MessageComponentTypes.TEXT_DISPLAY,
+                                content: `Invalid amount. Please enter a valid number (e.g., 25.50). You entered: "${value}"`,
+                            },
+                        ],
+                    },
+                });
+            }
+
+            const person = field === 'alfredo_spending' ? 'alfredo' : 'rachel';
+            threadData.tripData.spending[person] = amount;
         }
 
         // Update the pinned message
@@ -464,13 +491,14 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
         const options = req.body.data.options;
         const person = options[0].value;  // 'alfredo' or 'rachel'
         const amountStr = options[1].value.trim();  // Get string value
+        const description = options[2]?.value;  // Optional description
 
         // Parse the amount - handle both comma and period as decimal separators
         const normalizedAmount = amountStr.replace(',', '.');
         const amount = parseFloat(normalizedAmount);
 
-        // Additional validation for amount
-        if (isNaN(amount) || amount <= 0) {
+        // Additional validation for amount - allow negative amounts now
+        if (isNaN(amount) || amount === 0) {
             return res.send({
                 type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
                 data: {
@@ -478,7 +506,7 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
                     components: [
                         {
                             type: MessageComponentTypes.TEXT_DISPLAY,
-                            content: `Invalid amount. Please enter a positive number (e.g., 25.50). You entered: "${amountStr}"`,
+                            content: `Invalid amount. Please enter a non-zero number (e.g., 25.50 or -10.00). You entered: "${amountStr}"`,
                         },
                     ],
                 },
@@ -508,18 +536,20 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
                 },
             });
 
-            // Send confirmation message
+            // Send confirmation message to the channel (not private)
             const personName = person.charAt(0).toUpperCase() + person.slice(1);
-            const formattedAmount = amount.toFixed(2);
+            const verb = amount > 0 ? 'Added' : 'Removed';
+            const absAmount = Math.abs(amount).toFixed(2);
+            const descriptionPhrase = description ? ` for ${description}` : '';
 
             return res.send({
                 type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
                 data: {
-                    flags: InteractionResponseFlags.EPHEMERAL | InteractionResponseFlags.IS_COMPONENTS_V2,
+                    flags: InteractionResponseFlags.IS_COMPONENTS_V2,
                     components: [
                         {
                             type: MessageComponentTypes.TEXT_DISPLAY,
-                            content: `Added $${formattedAmount} to ${personName}'s spending. New total: $${threadData.tripData.spending[person].toFixed(2)}`,
+                            content: `${verb} $${absAmount}${descriptionPhrase} to ${personName}'s spending. New total: $${threadData.tripData.spending[person].toFixed(2)}`,
                         },
                     ],
                 },

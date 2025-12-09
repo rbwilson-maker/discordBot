@@ -53,6 +53,14 @@ const UPDATE_TRIP_INFO_COMMAND = {
                     name: 'Notes',
                     value: 'notes',
                 },
+                {
+                    name: "Alfredo's Spending",
+                    value: 'alfredo_spending',
+                },
+                {
+                    name: "Rachel's Spending",
+                    value: 'rachel_spending',
+                },
             ],
         },
         {
@@ -90,8 +98,14 @@ const LOG_SPENDING_COMMAND = {
         {
             type: 3,
             name: 'amount',
-            description: 'Amount spent (e.g., 25.50)',
+            description: 'Amount spent (e.g., 25.50 or -10.00 to reduce)',
             required: true,
+        },
+        {
+            type: 3,
+            name: 'description',
+            description: 'What was this expense for? (e.g., hotel, food)',
+            required: false,
         }
     ],
     integration_types: [0, 1],
