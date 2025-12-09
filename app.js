@@ -675,6 +675,24 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
         }
     }
 
+    if (name === 'add-movie') {
+        // Bot should open a link to a movie submission form
+        const formUrl = 'https://docs.google.com/forms/d/e/1FAIpQLSeharPcq2ZvOMjbGVviaAy2HtpW1VnStG0QADKITO8_FzjHCw/viewform'; // Replace with actual form URL
+        
+        return res.send({
+            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+            data: {
+                flags: InteractionResponseFlags.EPHEMERAL | InteractionResponseFlags.IS_COMPONENTS_V2,
+                components: [
+                    {
+                        type: MessageComponentTypes.TEXT_DISPLAY,
+                        content: `Click the link to add a movie to your watchlist: ${formUrl}`,
+                    },
+                ],
+            },
+        });
+    }
+
     console.error(`unknown command: ${name}`);
     return res.status(400).json({ error: 'unknown command' });
   }

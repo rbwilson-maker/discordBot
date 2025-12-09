@@ -10,7 +10,7 @@ const TEST_COMMAND = {
   contexts: [0, 1, 2],
 };
 
-const MY_COMMAND = {
+const CREATE_THREAD_COMMAN = {
     name: 'create-trip-thread',
     type: 1,
     description: 'Create a thread for a trip',
@@ -120,11 +120,20 @@ const SETTLE_THREAD_COMMAND = {
     contexts: [0, 1, 2],
 }
 
+const ADD_MOVIE_COMMAND = {
+    name: 'add-movie',
+    type: 1,
+    description: 'Add a movie to your watchlist via the form',
+    integration_types: [0, 1],
+    contexts: [0, 1, 2],
+};
+
 const ALL_COMMANDS = [
-  TEST_COMMAND, MY_COMMAND, 
+  TEST_COMMAND, CREATE_THREAD_COMMAND, 
   UPDATE_TRIP_INFO_COMMAND, 
   LOG_SPENDING_COMMAND, 
-  SETTLE_THREAD_COMMAND
+  SETTLE_THREAD_COMMAND,
+  ADD_MOVIE_COMMAND,
 ];
 
 InstallGlobalCommands(process.env.APP_ID, ALL_COMMANDS);
