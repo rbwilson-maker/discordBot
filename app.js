@@ -539,7 +539,6 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
             // Send confirmation message to the channel (not private)
             const personName = person.charAt(0).toUpperCase() + person.slice(1);
             const verb = amount > 0 ? 'Added' : 'Removed';
-            const absAmount = Math.abs(amount).toFixed(2);
             const descriptionPhrase = description ? ` for ${description}` : '';
 
             return res.send({
@@ -549,7 +548,7 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
                     components: [
                         {
                             type: MessageComponentTypes.TEXT_DISPLAY,
-                            content: `${verb} $${absAmount}${descriptionPhrase} to ${personName}'s spending. New total: $${threadData.tripData.spending[person].toFixed(2)}`,
+                            content: `${personName} - ${descriptionPhrase} - $${amount}`,
                         },
                     ],
                 },
