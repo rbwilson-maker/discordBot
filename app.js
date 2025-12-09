@@ -539,7 +539,7 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
             // Send confirmation message to the channel (not private)
             const personName = person.charAt(0).toUpperCase() + person.slice(1);
             const verb = amount > 0 ? 'Added' : 'Removed';
-            const descriptionPhrase = description ? ` for ${description}` : '';
+            const descriptionPhrase = description ? ` - ${description}` : '';
 
             return res.send({
                 type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
@@ -548,7 +548,7 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
                     components: [
                         {
                             type: MessageComponentTypes.TEXT_DISPLAY,
-                            content: `${personName} - ${descriptionPhrase} - $${amount}`,
+                            content: `${personName} - $${amount}${descriptionPhrase}`,
                         },
                     ],
                 },
