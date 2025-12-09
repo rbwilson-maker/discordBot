@@ -49,6 +49,10 @@ const UPDATE_TRIP_INFO_COMMAND = {
                     name: 'End Date',
                     value: 'end_date',
                 },
+                {
+                    name: 'Notes',
+                    value: 'notes',
+                },
             ],
         },
         {
@@ -94,6 +98,19 @@ const LOG_SPENDING_COMMAND = {
     contexts: [0, 1, 2],
 }
 
-const ALL_COMMANDS = [TEST_COMMAND, MY_COMMAND, UPDATE_TRIP_INFO_COMMAND, LOG_SPENDING_COMMAND];
+const SETTLE_THREAD_COMMAND = {
+    name: 'settle-thread',
+    type: 1,
+    description: 'Settle spending for the trip and close this thread',
+    integration_types: [0, 1],
+    contexts: [0, 1, 2],
+}
+
+const ALL_COMMANDS = [
+  TEST_COMMAND, MY_COMMAND, 
+  UPDATE_TRIP_INFO_COMMAND, 
+  LOG_SPENDING_COMMAND, 
+  SETTLE_THREAD_COMMAND
+];
 
 InstallGlobalCommands(process.env.APP_ID, ALL_COMMANDS);

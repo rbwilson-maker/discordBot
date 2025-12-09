@@ -20,17 +20,18 @@ const tripThreads = {};
  * Helper function to create trip info message component
  */
 function createTripInfoMessage(threadId, tripData = {}) {
-  const lodgingAddress = tripData.lodgingAddress || '_Not set yet_';
-  const startDate = tripData.startDate || '_Not set yet_';
-  const endDate = tripData.endDate || '_Not set yet_';
+  const lodgingAddress = tripData.lodgingAddress || '<update>';
+  const startDate = tripData.startDate || '<update>';
+  const endDate = tripData.endDate || '<update>';
   const alfredoSpending = (tripData.spending?.alfredo || 0).toFixed(2);
   const rachelSpending = (tripData.spending?.rachel || 0).toFixed(2);
+  const notes = tripData.notes || '<update>';
 
   return {
     components: [
       {
         type: MessageComponentTypes.TEXT_DISPLAY,
-        content: `## Trip Information\n\n**Lodging Address:**\n${lodgingAddress}\n\n**Trip Dates:**\n${startDate} - ${endDate}\n\n---\n\n## Spending Tracker\n\n**Alfredo's Spending:**\n$${alfredoSpending}\n\n**Rachel's Spending:**\n$${rachelSpending}`,
+        content: `## Trip Information\n\n**Lodging Address:** ${lodgingAddress}\n**Trip Dates:** ${startDate} - ${endDate}\n--------------\n**Alfredo's Spending:** $${alfredoSpending}\n**Rachel's Spending:** $${rachelSpending}\n--------------\n**Notes:**\n${notes}`,
       },
     ],
   };
@@ -190,7 +191,7 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
 
         // Get the field to update and the value
         const options = req.body.data.options;
-        const field = options[0].value; // 'lodging_address', 'start_date', or 'end_date'
+        const field = options[0].value; // 'lodging_address', 'start_date', 'end_date', or 'notes'
         const value = options[1].value;
 
         // Update the trip data
@@ -201,6 +202,13 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
             threadData.tripData.startDate = value;
         } else if (field === 'end_date') {
             threadData.tripData.endDate = value;
+        } else if (field === 'notes') {
+            // Append to existing notes with a newline
+            if (threadData.tripData.notes && threadData.tripData.notes !== '<update>') {
+                threadData.tripData.notes += '\n' + value;
+            } else {
+                threadData.tripData.notes = value;
+            }
         }
 
         // Update the pinned message
@@ -336,6 +344,110 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
                         {
                             type: MessageComponentTypes.TEXT_DISPLAY,
                             content: `Failed to update spending: ${err.message}`,
+                        },
+                    ],
+                },
+            });
+        }
+    }
+
+    if (name === 'settle-thread') {
+        // calculate who owes who and how much, then close the thread
+        const channelId = req.body.channel_id;
+
+        // Check if command is used in a trip thread
+        if (!tripThreads[channelId]) {
+            return res.send({
+                type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+                data: {
+                    flags: InteractionResponseFlags.EPHEMERAL | InteractionResponseFlags.IS_COMPONENTS_V2,
+                    components: [
+                        {
+                            type: MessageComponentTypes.TEXT_DISPLAY,
+                            content: 'This command can only be used in a trip thread created with /create-trip-thread.',
+                        },
+                    ],
+                },
+            });
+        }
+
+        const threadData = tripThreads[channelId];
+        const alfredoTotal = parseFloat(threadData.tripData.spending?.alfredo) || 0;
+        const rachelTotal = parseFloat(threadData.tripData.spending?.rachel) || 0;
+        const totalSpent = alfredoTotal + rachelTotal;
+        const splitAmount = totalSpent / 2;
+
+        let settlementMessage = '';
+        if (alfredoTotal > splitAmount) {
+            const amountOwed = (alfredoTotal - splitAmount).toFixed(2);
+            settlementMessage = `Rachel owes Alfredo $${amountOwed} to settle up.`;
+        } else if (rachelTotal > splitAmount) {
+            const amountOwed = (rachelTotal - splitAmount).toFixed(2);
+            settlementMessage = `Alfredo owes Rachel $${amountOwed} to settle up.`;
+        } else {
+            settlementMessage = 'Alfredo and Rachel are even. No one owes anything.';
+        }
+
+        // Respond to interaction first, then close the thread and send message to plans
+        try {
+            // Get thread information to find parent channel
+            const threadInfoEndpoint = `channels/${channelId}`;
+            const threadInfoRes = await DiscordRequest(threadInfoEndpoint, { method: 'GET' });
+            const threadInfo = await threadInfoRes.json();
+            const parentChannelId = threadInfo.parent_id;
+            const threadName = threadInfo.name;
+
+            // Send ephemeral confirmation to user
+            res.send({
+                type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+                data: {
+                    flags: InteractionResponseFlags.EPHEMERAL | InteractionResponseFlags.IS_COMPONENTS_V2,
+                    components: [
+                        {
+                            type: MessageComponentTypes.TEXT_DISPLAY,
+                            content: 'Thread settled and archived! Settlement posted to plans channel.',
+                        },
+                    ],
+                },
+            });
+
+            // Send settlement message to the parent channel
+            const messageEndpoint = `channels/${parentChannelId}/messages`;
+            const messageBody = {
+                flags: InteractionResponseFlags.IS_COMPONENTS_V2,
+                components: [
+                    {
+                        type: MessageComponentTypes.TEXT_DISPLAY,
+                        content: `## Trip Settled: ${threadName}\n\n${settlementMessage}\n\n**Total Spent:** $${totalSpent.toFixed(2)}\n**Alfredo's Total:** $${alfredoTotal.toFixed(2)}\n**Rachel's Total:** $${rachelTotal.toFixed(2)}`,
+                    },
+                ],
+            };
+            DiscordRequest(messageEndpoint, { method: 'POST', body: messageBody }).catch(err => {
+                console.error('Error posting settlement message:', err);
+            });
+
+            // Archive the thread after responding (don't await this)
+            const closeEndpoint = `channels/${channelId}`;
+            DiscordRequest(closeEndpoint, {
+                method: 'PATCH',
+                body: { archived: true },
+            }).catch(err => {
+                console.error('Error archiving thread:', err);
+            });
+
+            // Must return to prevent falling through to the error handler at the end
+            return;
+
+        } catch (err) {
+            console.error('Error settling thread:', err);
+            return res.send({
+                type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+                data: {
+                    flags: InteractionResponseFlags.EPHEMERAL | InteractionResponseFlags.IS_COMPONENTS_V2,
+                    components: [
+                        {
+                            type: MessageComponentTypes.TEXT_DISPLAY,
+                            content: `Failed to settle thread: ${err.message}`,
                         },
                     ],
                 },
