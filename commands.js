@@ -1,21 +1,5 @@
 import 'dotenv/config';
-import { getRPSChoices } from './game.js';
-import { capitalize, InstallGlobalCommands } from './utils.js';
-
-// Get the game choices from game.js
-function createCommandChoices() {
-  const choices = getRPSChoices();
-  const commandChoices = [];
-
-  for (let choice of choices) {
-    commandChoices.push({
-      name: capitalize(choice),
-      value: choice.toLowerCase(),
-    });
-  }
-
-  return commandChoices;
-}
+import { InstallGlobalCommands } from './utils.js';
 
 // Simple test command
 const TEST_COMMAND = {
@@ -24,33 +8,6 @@ const TEST_COMMAND = {
   type: 1,
   integration_types: [0, 1],
   contexts: [0, 1, 2],
-};
-
-// Second test command
-const TEST2_COMMAND = {
-  name: 'test2',
-  description: 'Second test command',
-  type: 1,
-  integration_types: [0, 1],
-  contexts: [0, 1, 2],
-};
-
-// Command containing options
-const CHALLENGE_COMMAND = {
-  name: 'challenge',
-  description: 'Challenge to a match of rock paper scissors',
-  options: [
-    {
-      type: 3,
-      name: 'object',
-      description: 'Pick your object',
-      required: true,
-      choices: createCommandChoices(),
-    },
-  ],
-  type: 1,
-  integration_types: [0, 1],
-  contexts: [0, 2],
 };
 
 const MY_COMMAND = {
@@ -69,6 +26,42 @@ const MY_COMMAND = {
     contexts: [0, 1, 2],
 }
 
-const ALL_COMMANDS = [TEST_COMMAND, TEST2_COMMAND, CHALLENGE_COMMAND, MY_COMMAND];
+const UPDATE_TRIP_INFO_COMMAND = {
+    name: 'update-trip-info',
+    type: 1,
+    description: 'Update trip information in the current trip thread',
+    options: [
+        {
+            type: 3,
+            name: 'field',
+            description: 'Field to update',
+            required: true,
+            choices: [
+                {
+                    name: 'Lodging Address',
+                    value: 'lodging_address',
+                },
+                {
+                    name: 'Start Date',
+                    value: 'start_date',
+                },
+                {
+                    name: 'End Date',
+                    value: 'end_date',
+                },
+            ],
+        },
+        {
+            type: 3,
+            name: 'value',
+            description: 'New value for the field',
+            required: true,
+        }
+    ],
+    integration_types: [0, 1],
+    contexts: [0, 1, 2],
+}
+
+const ALL_COMMANDS = [TEST_COMMAND, MY_COMMAND, UPDATE_TRIP_INFO_COMMAND];
 
 InstallGlobalCommands(process.env.APP_ID, ALL_COMMANDS);
