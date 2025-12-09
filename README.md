@@ -18,6 +18,8 @@ ngrok http 3000
 ```
 starts the bot and the ngrok tunnel.
 
+Ask Rachel for the `.env` file it uses values from her discord dev account.
+
 After adding a new command, run the following command and restart the bot and discord client.
 ```
 npm run register
