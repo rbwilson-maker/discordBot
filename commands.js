@@ -44,6 +44,22 @@ const CHALLENGE_COMMAND = {
   contexts: [0, 2],
 };
 
-const ALL_COMMANDS = [TEST_COMMAND, CHALLENGE_COMMAND];
+const MY_COMMAND = {
+    name: 'create-thread',
+    type: 1,
+    description: 'Create a thread in the current channel',
+    options: [
+        {
+      type: 3,
+            name: 'thread-name',
+            description: 'Name your thread',
+            required: true,
+        }
+    ],
+  integration_types: [0, 1],
+  contexts: [0, 2],
+}
+
+const ALL_COMMANDS = [TEST_COMMAND, CHALLENGE_COMMAND, MY_COMMAND];
 
 InstallGlobalCommands(process.env.APP_ID, ALL_COMMANDS);

@@ -101,6 +101,54 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
         });
     }
 
+    if (name === 'create-thread') {
+        const threadName = req.body.data.options[0].value;
+        const channelId = req.body.channel_id;
+
+        res.send({
+            type: InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE,
+        });
+
+        try {
+            // Create thread via Discord API
+            const endpoint = `channels/${channelId}/threads`;
+            const body = {
+                name: threadName,
+                type: 11, // Type 11 is for public threads
+                auto_archive_duration: 60, // Auto-archive after 60 minutes of inactivity
+            };
+
+            const threadRes = await DiscordRequest(endpoint, { method: 'POST', body });
+            const thread = await threadRes.json();
+
+            return res.send({
+                type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+                data: {
+                    flags: InteractionResponseFlags.IS_COMPONENTS_V2,
+                    components: [
+                        {
+                            type: MessageComponentTypes.TEXT_DISPLAY,
+                            content: `Thread "${threadName}" created! Join here: <#${thread.id}>`,
+                        },
+                    ],
+                },
+            });
+        } catch (err) {
+            console.error('Error creating thread:', err);
+            return res.send({
+                type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+                data: {
+                    flags: InteractionResponseFlags.EPHEMERAL | InteractionResponseFlags.IS_COMPONENTS_V2,
+                    components: [
+                        {
+                            type: MessageComponentTypes.TEXT_DISPLAY,
+                            content: `Failed to create thread: ${err.message}`,
+                        },
+                    ],
+                },
+            });
+        }
+    }
 
     console.error(`unknown command: ${name}`);
     return res.status(400).json({ error: 'unknown command' });
