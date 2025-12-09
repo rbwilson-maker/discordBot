@@ -25,16 +25,206 @@ function createTripInfoMessage(threadId, tripData = {}) {
   const endDate = tripData.endDate || '<update>';
   const alfredoSpending = (tripData.spending?.alfredo || 0).toFixed(2);
   const rachelSpending = (tripData.spending?.rachel || 0).toFixed(2);
-  const notes = tripData.notes || '<update>';
+  const notes = tripData.notes || '';
 
   return {
     components: [
       {
         type: MessageComponentTypes.TEXT_DISPLAY,
-        content: `## Trip Information\n\n**Lodging Address:** ${lodgingAddress}\n**Trip Dates:** ${startDate} - ${endDate}\n--------------\n**Alfredo's Spending:** $${alfredoSpending}\n**Rachel's Spending:** $${rachelSpending}\n--------------\n**Notes:**\n${notes}`,
+        content: `## Trip Information\n**Lodging Address:** ${lodgingAddress}\n**Trip Dates:** ${startDate} - ${endDate}\n**Notes:**\n${notes}\n--------------\n**Alfredo's Spending:** $${alfredoSpending}\n**Rachel's Spending:** $${rachelSpending}`,
       },
     ],
   };
+}
+
+/**
+ * Helper function to parse Trip Information message content back into trip data
+ */
+function parseTripInfoMessage(messageContent) {
+  // Check if this is a Trip Information message
+  if (!messageContent.startsWith('## Trip Information')) {
+    return null;
+  }
+
+  try {
+    // Define regex patterns to extract each field
+    const lodgingMatch = messageContent.match(/\*\*Lodging Address:\*\* (.+)/);
+    const datesMatch = messageContent.match(/\*\*Trip Dates:\*\* (.+) - (.+)/);
+    const notesMatch = messageContent.match(/\*\*Notes:\*\*\n([\s\S]*?)\n--------------/);
+    const alfredoMatch = messageContent.match(/\*\*Alfredo's Spending:\*\* \$(\d+\.?\d*)/);
+    const rachelMatch = messageContent.match(/\*\*Rachel's Spending:\*\* \$(\d+\.?\d*)/);
+
+    // Extract values with fallbacks
+    const lodgingAddress = lodgingMatch ? lodgingMatch[1].trim() : '<update>';
+    const startDate = datesMatch ? datesMatch[1].trim() : '<update>';
+    const endDate = datesMatch ? datesMatch[2].trim() : '<update>';
+    const notes = notesMatch ? notesMatch[1].trim() : '';
+    const alfredoSpending = alfredoMatch ? parseFloat(alfredoMatch[1]) : 0;
+    const rachelSpending = rachelMatch ? parseFloat(rachelMatch[1]) : 0;
+
+    return {
+      lodgingAddress,
+      startDate,
+      endDate,
+      notes,
+      spending: {
+        alfredo: alfredoSpending,
+        rachel: rachelSpending,
+      },
+    };
+  } catch (error) {
+    console.warn('[INIT] Error parsing trip info message:', error.message);
+    return null;
+  }
+}
+
+/**
+ * Helper function to get all guilds the bot is in
+ */
+async function getAllGuilds() {
+  try {
+    const endpoint = 'users/@me/guilds';
+    const res = await DiscordRequest(endpoint, { method: 'GET' });
+    return await res.json();
+  } catch (error) {
+    console.error('[INIT] Failed to fetch guilds:', error.message);
+    return [];
+  }
+}
+
+/**
+ * Helper function to get all active threads in a guild
+ */
+async function getAllActiveThreadsInGuild(guildId) {
+  try {
+    const endpoint = `guilds/${guildId}/threads/active`;
+    const res = await DiscordRequest(endpoint, { method: 'GET' });
+    const data = await res.json();
+    return data.threads || [];
+  } catch (error) {
+    console.error(`[INIT] Failed to fetch threads for guild ${guildId}:`, error.message);
+    return [];
+  }
+}
+
+/**
+ * Helper function to get pinned messages in a thread
+ */
+async function getPinnedMessagesInThread(threadId) {
+  try {
+    const endpoint = `channels/${threadId}/pins`;
+    const res = await DiscordRequest(endpoint, { method: 'GET' });
+    return await res.json();
+  } catch (error) {
+    // 403 errors are common if bot lacks permissions
+    if (error.message.includes('403')) {
+      console.log(`[INIT] No permission to read pins in thread ${threadId}`);
+    } else {
+      console.warn(`[INIT] Failed to fetch pins for thread ${threadId}:`, error.message);
+    }
+    return [];
+  }
+}
+
+/**
+ * Main function to load existing trip threads on bot startup
+ */
+async function loadExistingTripThreads() {
+  console.log('[INIT] Starting trip thread discovery...');
+
+  try {
+    // Get all guilds
+    const guilds = await getAllGuilds();
+    console.log(`[INIT] Found ${guilds.length} guild(s) to scan`);
+
+    if (guilds.length === 0) {
+      console.log('[INIT] Bot is not in any guilds yet');
+      return;
+    }
+
+    let threadsLoaded = 0;
+    let threadsScanned = 0;
+
+    // Process each guild
+    for (const guild of guilds) {
+      console.log(`[INIT] Scanning guild: ${guild.name} (${guild.id})`);
+
+      try {
+        // Get all active threads in guild
+        const threads = await getAllActiveThreadsInGuild(guild.id);
+        console.log(`[INIT] Found ${threads.length} active thread(s) in guild ${guild.id}`);
+
+        // Process each thread
+        for (const thread of threads) {
+          threadsScanned++;
+          console.log(`[INIT] Checking thread: ${thread.name} (${thread.id})`);
+
+          try {
+            // Get pinned messages
+            const pinnedMessages = await getPinnedMessagesInThread(thread.id);
+
+            if (pinnedMessages.length === 0) {
+              console.log(`[INIT] Skipping thread ${thread.id}: No pinned messages`);
+              continue;
+            }
+
+            // Look for Trip Information message
+            let tripInfoMessage = null;
+            for (const message of pinnedMessages) {
+              // Check if message has components with Trip Information
+              if (message.components && message.components.length > 0) {
+                const content = message.components[0].content;
+                if (content && content.startsWith('## Trip Information')) {
+                  tripInfoMessage = { id: message.id, content };
+                  break;
+                }
+              }
+            }
+
+            if (!tripInfoMessage) {
+              console.log(`[INIT] Skipping thread ${thread.id}: No Trip Information message found`);
+              continue;
+            }
+
+            // Parse the message
+            const tripData = parseTripInfoMessage(tripInfoMessage.content);
+
+            if (!tripData) {
+              console.warn(`[INIT] Failed to parse trip data from thread ${thread.id}`);
+              continue;
+            }
+
+            // Store in tripThreads
+            tripThreads[thread.id] = {
+              messageId: tripInfoMessage.id,
+              tripData,
+            };
+
+            threadsLoaded++;
+            console.log(`[INIT] Successfully loaded trip thread: ${thread.name} (${thread.id})`);
+            console.log(`[INIT]   - Lodging: ${tripData.lodgingAddress}`);
+            console.log(`[INIT]   - Dates: ${tripData.startDate} - ${tripData.endDate}`);
+            console.log(`[INIT]   - Spending: Alfredo=$${tripData.spending.alfredo.toFixed(2)}, Rachel=$${tripData.spending.rachel.toFixed(2)}`);
+
+          } catch (threadError) {
+            console.error(`[INIT] Error processing thread ${thread.id}:`, threadError.message);
+            // Continue to next thread
+          }
+        }
+
+      } catch (guildError) {
+        console.error(`[INIT] Error processing guild ${guild.id}:`, guildError.message);
+        // Continue to next guild
+      }
+    }
+
+    console.log(`[INIT] Trip thread discovery complete.`);
+    console.log(`[INIT] Scanned ${threadsScanned} thread(s), loaded ${threadsLoaded} trip thread(s)`);
+
+  } catch (criticalError) {
+    console.error('[INIT] Critical error during trip thread initialization:', criticalError);
+    console.error('[INIT] Bot will continue running, but trip threads may not be loaded');
+  }
 }
 
 /**
@@ -418,7 +608,7 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
                 components: [
                     {
                         type: MessageComponentTypes.TEXT_DISPLAY,
-                        content: `## Trip Settled: ${threadName}\n\n${settlementMessage}\n\n**Total Spent:** $${totalSpent.toFixed(2)}\n**Alfredo's Total:** $${alfredoTotal.toFixed(2)}\n**Rachel's Total:** $${rachelTotal.toFixed(2)}`,
+                        content: `## Trip Settled: ${threadName}\n${settlementMessage}\n--------------\n**Total Spent:** $${totalSpent.toFixed(2)}\n**Alfredo's Total:** $${alfredoTotal.toFixed(2)}\n**Rachel's Total:** $${rachelTotal.toFixed(2)}`,
                     },
                 ],
             };
@@ -469,6 +659,11 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
   return res.status(400).json({ error: 'unknown interaction type' });
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log('Listening on port', PORT);
+
+  // Load existing trip threads from Discord
+  await loadExistingTripThreads();
+
+  console.log('Bot ready to receive interactions');
 });
